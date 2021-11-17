@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: ---
+  it is master nested yaml file which will create VPC related components and Mysql RDS Database
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Template Stack
+        Parameters:
+          - CFNTemplatesS3Bucket
+      - Label:
+          default: VPC
+        Parameters:
+          - VpcCIDR
+          - AvailabilityZone1
+          - PublicSubnet1CIDR
+          - PrivateSubnet1CIDR
+          - AvailabilityZone2
+          - PublicSubnet2CIDR
+          - PrivateSubnet2CIDR
+          - SecurityGroupIngressCIDR
+      - Label:
+          default: RDS instance
+        Parameters:
+          - DBName
+          - DBUser
+          - DBPassword
+          - MultiAZDatabase
+          - DBAllocatedStorage
+      
+    ParameterLabels:
+      VpcCIDR:
+        default: VPC CIDR
+      AvailabilityZone1:
+        default: Availability Zone 1
+      PublicSubnet1CIDR:
+        default: Public Subnet 1
+      PrivateSubnet1CIDR:
+        default: Private Subnet 1
+      AvailabilityZone2:
+        default: Availability Zone 2
+      PublicSubnet2CIDR:
+        default: Public Subnet 2
+      PrivateSubnet2CIDR:
+        default: Private Subnet 2
+      SecurityGroupIngressCIDR:
+        default: Security Groups Ingress CIDR
+      CFNTemplatesS3Bucket:
+        default: Cloudformation Templates Stack
+      
+
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.250.0.0/16
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.250.1.0/24
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.250.2.0/24
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.250.3.0/24
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.250.4.0/24
+  AvailabilityZone1:
+    Description: Please select an Availability Zone
+    Type: "AWS::EC2::AvailabilityZone::Name"
+    Default: "us-east-1a"
+  AvailabilityZone2:
+    Description: Please select a second Availability Zone
+    Type: "AWS::EC2::AvailabilityZone::Name"
+    Default: "us-east-1b"
+  SecurityGroupIngressCIDR:
+    Description: Please enter the CIDR block of the IP from which to allow access to EC2 and RDS.
+    Type: String
+  DBName:
+    Default: wordpressdb
+    Description: The WordPress database name
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBUser:
+    NoEcho: 'true'
+    Description: The WordPress database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: The WordPress database admin account password
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+  MultiAZDatabase:
+    Default: 'false'
+    Description: Create a Multi-AZ MySQL Amazon RDS database instance
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: must be either true or false.
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+  DBClass:
+    Default: db.t2.micro
+    Description: DB instance class
+    Type: String
+    ConstraintDescription: Must select a valid DB instance type.
+  Datab:
+    Description: Database selection
+    Type: String
+    Default: mysql
+  CFNTemplatesS3Bucket:
+    Description: Name of the S3 bucket where cloud formation templates are stored.
+    Type: String
+
+Resources:
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${CFNTemplatesS3Bucket}/vpc.yaml
+      Parameters:
+        EnvironmentName: !Ref AWS::StackName
+        VpcCIDR: !Ref VpcCIDR
+        PublicSubnet1CIDR: !Ref PublicSubnet1CIDR
+        PublicSubnet2CIDR: !Ref PublicSubnet2CIDR
+        PrivateSubnet1CIDR: !Ref PrivateSubnet1CIDR
+        PrivateSubnet2CIDR: !Ref PrivateSubnet2CIDR
+        AvailabilityZone1: !Ref AvailabilityZone1
+        AvailabilityZone2: !Ref AvailabilityZone2
+
+  SecurityGroups:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${CFNTemplatesS3Bucket}/security-groups.yaml
+      Parameters:
+        EnvironmentName: !Ref AWS::StackName
+        VPC: !GetAtt VPC.Outputs.VPC
+        IngressCIDR: !Ref SecurityGroupIngressCIDR
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: !Ref Datab
+      MultiAZ: !Ref MultiAZDatabase
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: !Ref DBClass
